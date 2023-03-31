@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -9,8 +10,8 @@ namespace Hw_AsyncCarPlates
 	public class Plates
 	{
 		public string[] PlateFiles;
-		public string address;
-		public string FolderPath;
+		private string Address;
+		private string FolderPath;
 
 		public int DownloadedBytes { get; private set; }
 
@@ -18,28 +19,51 @@ namespace Hw_AsyncCarPlates
 		{
 			DownloadedBytes = 0;
 			FolderPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Car Plates");
-			GetFilesList();
+			Address = "http://51.91.120.89/TABLICE/";
+			PlateFiles = GetFilesList();
 		}
 
-		public void GetFilesList()
+		public string[] GetFilesList()
 		{
-			WebClient wb = new WebClient();
-			byte[] plateBytes = wb.DownloadData("http://51.91.120.89/TABLICE/");
-			DownloadedBytes += plateBytes.Length;
-			PlateFiles = Encoding.Default.GetString(plateBytes).Split('\n');
-			Console.WriteLine($"{DownloadedBytes}B\n");
-			Directory.CreateDirectory(FolderPath);
+			try
+			{
+				WebClient wb = new WebClient();
+				byte[] plateBytes = wb.DownloadData(Address);
+				DownloadedBytes += plateBytes.Length;
+				Console.WriteLine($"{DownloadedBytes}B\n");
+				if (!Directory.Exists(FolderPath))
+				{
+					Directory.CreateDirectory(FolderPath);
+				}
+				return Encoding.Default.GetString(plateBytes).Split('\n');
+			}
+			catch (Exception ex)
+			{
+				Console.WriteLine($"Error while downloading file list \n");
+			}
+			return new string[0];
 		}
 		public void DownloadJpgsParallel()
 		{
 			Parallel.For(0, PlateFiles.Length - 1, i =>
 			{
-				WebClient wb = new WebClient();
-				byte[] temp = wb.DownloadData("http://51.91.120.89/TABLICE/" + PlateFiles[i]);
-				DownloadedBytes += temp.Length;
-				LogDataDownloaded(temp.Length, PlateFiles[i]);
-				File.WriteAllBytes(FolderPath + "/" + PlateFiles[i].Split('.')[0] + ".jpg", temp);
+				try
+				{
+					WebClient wb = new WebClient();
+					byte[] temp = wb.DownloadData(Address + PlateFiles[i]);
+					DownloadedBytes += temp.Length;
+					LogDataDownloaded(temp.Length, PlateFiles[i]);
+					File.WriteAllBytes(FolderPath + "/" + PlateFiles[i].TrimEnd('\r'), temp);
+				}
+				catch (Exception ex)
+				{
+					Console.WriteLine($"Error while downloading file {PlateFiles[i]}\n");
+				}
 			});
+			if(PlateFiles.Length != 0)
+			{
+				Process.Start("explorer.exe", FolderPath);
+			}
 		}
 		private string DataInfo(int amountBytes)
 		{
@@ -62,18 +86,10 @@ namespace Hw_AsyncCarPlates
 		}
 		private void LogDataDownloaded(int bytesNumber, string fileName)
 		{
-            Console.WriteLine("" +
-							 $"File name: {fileName}\n" +
-							 $"File size: {DataInfo(bytesNumber)}\n" +
-							 $"Overall downloaded data: {DataInfo(DownloadedBytes)}\n");
+            Console.WriteLine($"File name:         {fileName}\n" +
+							  $"File size:         {DataInfo(bytesNumber)}\n" +
+							  $"Downloaded data:   {DataInfo(DownloadedBytes)}\n");
 		}
-		private void WriteColor(ConsoleColor color, string writeThis)
-		{
-			Console.ForegroundColor = color;
-			Console.Write(writeThis);
-			Console.ResetColor();
-		}
-
 		public override string ToString()
 		{
 			return $"Downloaded data - {DataInfo(DownloadedBytes)}";
